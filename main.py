@@ -1,8 +1,6 @@
 import telebot
 import random
 import os
-import json
-from datetime import datetime, timedelta
 from flask import Flask
 from threading import Thread
 
@@ -11,7 +9,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "Бот запущен и работает!"
+    return "Гача-бот активен!"
 
 def run():
     app.run(host='0.0.0.0', port=8080)
@@ -23,25 +21,6 @@ def keep_alive():
 
 # ТОКЕН БОТА
 bot = telebot.TeleBot('8708415476:AAFiu-sUnwvf031Izn8grrrrruBOtHLN7Jc')
-ADMIN_ID = 5654687480
-DB_FILE = 'db.json'
-
-
-# 2. ФУНКЦИИ ПАМЯТИ
-def load_db():
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-
-def save_db(data):
-    with open(DB_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
-
-user_last_roll = load_db()
 
 descriptions = {
     # === GENSHIN IMPACT (1 - 85) ===
@@ -310,29 +289,26 @@ descriptions = {
 
 
 def run_gacha(message):
-    global user_last_roll
-    user_id = str(message.from_user.id)
-    now = datetime.now()
-
-    if user_id in user_last_roll:
-        last_roll_time = datetime.fromisoformat(user_last_roll[user_id])
-        if now < last_roll_time + timedelta(hours=24):
-            wait = (last_roll_time + timedelta(hours=24)) - now
-            bot.reply_to(message, f"🚫 Энергия восстановится через {wait.seconds // 3600}ч. {(wait.seconds // 60) % 60}мин.")
-            return
-
     try:
+        # Выбираем случайное число (поставь 85 или 255 в зависимости от кол-ва фото)
         num = random.randint(1, 85)
         
-        if 1 <= num <= 85: category = "🟢 GENSHIN IMPACT"
-        elif 86 <= num <= 150: category = "🔴 HONKAI: STAR RAIL"
-        elif 151 <= num <= 210: category = "🔵 ZENLESS ZONE ZERO"
-        else: category = "🟡 ПРИКОЛЫ И МЕМЫ"
+        # Определяем категорию
+        if 1 <= num <= 85:
+            category = "🟢 GENSHIN IMPACT"
+        elif 86 <= num <= 150:
+            category = "🔴 HONKAI: STAR RAIL"
+        elif 151 <= num <= 210:
+            category = "🔵 ZENLESS ZONE ZERO"
+        else:
+            category = "🟡 ПРИКОЛЫ И МЕМЫ"
 
-        text = descriptions.get(num, "Персонаж в разработке...")
+        text = descriptions.get(num, "Описание в разработке...")
         
-        # Правильный путь для Linux-серверов
-        img_path = os.path.join(os.path.dirname(__file__), 'images', f'{num}.jpg')
+        # Путь к картинке (ищем в папке images рядом с кодом)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        img_path = os.path.join(script_dir, 'images', f'{num}.jpg')
+        
         caption_text = f"━━━━ {category} ━━━━\n\n{text}"
 
         if os.path.exists(img_path):
@@ -340,36 +316,36 @@ def run_gacha(message):
                 bot.send_photo(message.chat.id, photo, caption=caption_text)
         else:
             bot.send_message(message.chat.id, f"🖼 (Фото {num}.jpg не найдено)\n\n{caption_text}")
-        
-        user_last_roll[user_id] = now.isoformat()
-        save_db(user_last_roll)
 
     except Exception as e:
         print(f"Error: {e}")
-        bot.send_message(message.chat.id, "Произошла ошибка. Попробуй позже.")
+        bot.send_message(message.chat.id, "Ой! Произошла ошибка. Попробуй ещё раз.")
+
+# ОБРАБОТКА КОМАНД И КНОПОК
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    # Создаем кнопку
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
     btn = telebot.types.KeyboardButton("🔮 Крутить Гачу!")
     markup.add(btn)
-    bot.send_message(message.chat.id, f"Привет, {message.from_user.first_name}! Жми кнопку!", reply_markup=markup)
-
-@bot.message_handler(commands=['ya_pidoras'])
-def reset_timer(message):
-    if message.from_user.id == ADMIN_ID:
-        user_id = str(message.from_user.id)
-        if user_id in user_last_roll:
-            del user_last_roll[user_id]
-            save_db(user_last_roll)
-            bot.reply_to(message, "⚡ Энергия восстановлена!")
+    
+    bot.send_message(
+        message.chat.id, 
+        f"Привет, {message.from_user.first_name}! Жми на кнопку, чтобы получить карту дня!", 
+        reply_markup=markup
+    )
 
 @bot.message_handler(func=lambda message: message.text == "🔮 Крутить Гачу!")
 def gacha_button(message):
     run_gacha(message)
 
-# ЗАПУСК ВЕБ-СЕРВЕРА И БОТА
+@bot.message_handler(commands=['gacha'])
+def gacha_cmd(message):
+    run_gacha(message)
+
+# ЗАПУСК
 if __name__ == "__main__":
-    keep_alive()  # Запускает Flask в отдельном потоке
+    keep_alive()  # Запускаем Flask
     print("БОТ ЗАПУЩЕН!")
     bot.polling(none_stop=True)
