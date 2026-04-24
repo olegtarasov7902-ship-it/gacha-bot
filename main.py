@@ -2,13 +2,14 @@ import telebot
 import random
 import os
 import threading
+import time
 from flask import Flask
 from threading import Thread
 from supabase import create_client, Client
 from datetime import datetime, timedelta
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# ========== КОНФИГУРАЦИЯ ==========
+# ========== КОНФИГУРАЦИЯ (ЗАМЕНИ НА СВОИ ДАННЫЕ) ==========
 BOT_TOKEN = '8708415476:AAFiu-sUnwvf031Izn8grrrrruBOtHLN7Jc'
 SUPABASE_URL = "https://yvqwztjwcoxsirxvyqoq.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2cXd6dGp3Y294c2lyeHZ5cW9xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMzg3NjMsImV4cCI6MjA5MjYxNDc2M30.5eVs73s2_MYdD93jRFAS0N2m_nGmt5ze13inhjdR1Ws"
@@ -273,90 +274,18 @@ descriptions = {
     224: "⚡ Шоркипер (Хранительница берега): Таинственная фигура. Ты поддерживаешь баланс жизни и смерти, даруя союзникам новую надежду.",
     225: "🧊 Линне: Гяру-отличница. Твоя популярность в школе не знает границ, а за внешней лёгкостью скрывается острый ум."
 }
-def get_description(num):
-    return descriptions.get(num, f"Описание персонажа {num} в разработке.")
-
-# ========== РАБОТА С БД ==========
-def get_or_create_user(user_id):
-    result = supabase.table('users').select('*').eq('user_id', user_id).execute()
-    if result.data:
-        return result.data[0]
-    else:
-        new_user = {
-            'user_id': user_id,
-            'currency': 0,
-            'total_spins': 0,
-            'collection': '[]',
-            'level': 1,
-            'exp': 0,
-            'guaranteed_pull': False,
-            'last_free_spin': None
-        }
-        supabase.table('users').insert(new_user).execute()
-        return new_user
-
-def update_user(user_id, updates):
-    supabase.table('users').update(updates).eq('user_id', user_id).execute()
-
-# ========== КУЛДАУН ==========
-def get_cooldown_hours(level):
-    base = 24
-    reduction = (level - 1) * 0.5
-    return max(base - reduction, 6)
-
-def can_spin_free(user):
-    last = user.get('last_free_spin')
-    if last is None:
-        return True
-    last_time = datetime.fromisoformat(last)
-    cooldown = get_cooldown_hours(user['level'])
-    return datetime.now() >= last_time + timedelta(hours=cooldown)
-
-def get_remaining_cooldown(user):
-    last = user.get('last_free_spin')
-    if last is None:
-        return None
-    last_time = datetime.fromisoformat(last)
-    cooldown = get_cooldown_hours(user['level'])
-    ready_time = last_time + timedelta(hours=cooldown)
-    remaining = ready_time - datetime.now()
-    if remaining.total_seconds() <= 0:
-        return None
-    hours = int(remaining.total_seconds() // 3600)
-    minutes = int((remaining.total_seconds() % 3600) // 60)
-    return f"{hours}ч {minutes}мин"
-
-# ========== ОПЫТ ЗА ИСХОД ==========
-def get_exp_for_outcome(outcome_type):
-    if outcome_type == 'resource':
-        return random.randint(10, 30)
-    elif outcome_type == '4star':
-        return random.randint(40, 70)
-    elif outcome_type == '5star':
-        return random.randint(100, 150)
-    return 10
-
-# ========== МЕНЮ ==========
-def main_menu(user_has_guarantee=False):
-    markup = InlineKeyboardMarkup(row_width=2)
-    markup.add(InlineKeyboardButton("🔮 Крутить", callback_data="spin"))
-    markup.add(InlineKeyboardButton("📦 Инвентарь", callback_data="inventory"))
-    markup.add(InlineKeyboardButton("📊 Уровень", callback_data="level"))
-    if user_has_guarantee:
-        markup.add(InlineKeyboardButton("⭐ Гарант-крутка", callback_data="guaranteed_spin"))
-    return markup
-
-# ========== КРУТКА ==========
 def run_gacha(message, force_character=False):
     user_id = str(message.chat.id)
     user = get_or_create_user(user_id)
     
+    # Проверка кулдауна (только для обычной крутки)
     if not force_character and not can_spin_free(user):
         remaining = get_remaining_cooldown(user)
         msg = bot.send_message(message.chat.id, f"❌ Бесплатная крутка через {remaining}. Повышай уровень!", reply_markup=main_menu(user['guaranteed_pull']))
-        auto_delete(msg, 10)
+        auto_delete(msg, 10)  # сообщение об ошибке удалится через 10 секунд
         return
     
+    # Определяем исход
     if force_character:
         if random.randint(1, 100) <= 30:
             outcome_type = '5star'
@@ -379,6 +308,7 @@ def run_gacha(message, force_character=False):
     exp_gain = get_exp_for_outcome(outcome_type)
     currency_gain = random.randint(1, 5) if outcome_type == 'resource' else random.randint(5, 15)
     
+    # Обработка персонажа
     if outcome_type in ['4star', '5star']:
         if outcome_type == '4star':
             char_id = random.choice(four_star_ids)
@@ -386,10 +316,16 @@ def run_gacha(message, force_character=False):
         else:
             char_id = random.choice(five_star_ids) if five_star_ids else random.choice(four_star_ids)
             rarity_text = "⭐⭐⭐⭐⭐ (5★)"
-        if char_id <= 85: category = "🟢 GENSHIN IMPACT"
-        elif char_id <= 139: category = "🔴 HONKAI: STAR RAIL"
-        elif char_id <= 185: category = "🔵 ZENLESS ZONE ZERO"
-        else: category = "🟡 WUTHERING WAVES"
+        
+        if char_id <= 85:
+            category = "🟢 GENSHIN IMPACT"
+        elif char_id <= 139:
+            category = "🔴 HONKAI: STAR RAIL"
+        elif char_id <= 185:
+            category = "🔵 ZENLESS ZONE ZERO"
+        else:
+            category = "🟡 WUTHERING WAVES"
+        
         text = get_description(char_id)
         collection = eval(user['collection'])
         is_new = char_id not in collection
@@ -405,6 +341,7 @@ def run_gacha(message, force_character=False):
         text = "Тебе не попался персонаж, но ты получил ценный опыт и монеты."
         is_new = False
     
+    # Начисление опыта и монет, повышение уровня
     new_exp = user['exp'] + exp_gain
     new_currency = user['currency'] + currency_gain
     level = user['level']
@@ -416,7 +353,7 @@ def run_gacha(message, force_character=False):
         new_currency += 5
         if level % 5 == 0:
             update_user(user_id, {'guaranteed_pull': True})
-            bot.send_message(message.chat.id, f"🎁 За уровень {level} ты получил гарант-крутку!")
+            bot.send_message(message.chat.id, f"🎁 За уровень {level} ты получил гарант-крутку! Используй её в меню.")
     
     updates = {
         'exp': new_exp,
@@ -428,6 +365,7 @@ def run_gacha(message, force_character=False):
         updates['last_free_spin'] = datetime.now().isoformat()
     update_user(user_id, updates)
     
+    # Формируем текст сообщения
     if outcome_type in ['4star', '5star']:
         caption = f"━━━━ {category} ━━━━\n\n{rarity_text}\n{text}\n\n"
         if is_new:
@@ -441,19 +379,19 @@ def run_gacha(message, force_character=False):
         caption += f"🎉 Новый уровень {level}! +5 монет!\n"
     caption += f"\n📊 Уровень: {level} | 📈 Опыт: {new_exp}/{level*100} | 💰 Монет: {new_currency}"
     
-    user = get_or_create_user(user_id)  # обновим данные для меню
+    # Отправка результата без автоудаления
+    user = get_or_create_user(user_id)  # обновили данные для меню
     if outcome_type in ['4star', '5star'] and char_id:
         img_path = os.path.join(os.path.dirname(__file__), 'images', f'{char_id}.jpg')
         if os.path.exists(img_path):
             with open(img_path, 'rb') as photo:
-                msg = bot.send_photo(message.chat.id, photo, caption=caption, reply_markup=main_menu(user['guaranteed_pull']))
+                bot.send_photo(message.chat.id, photo, caption=caption, reply_markup=main_menu(user['guaranteed_pull']))
         else:
-            msg = bot.send_message(message.chat.id, caption, reply_markup=main_menu(user['guaranteed_pull']))
+            bot.send_message(message.chat.id, caption, reply_markup=main_menu(user['guaranteed_pull']))
     else:
-        msg = bot.send_message(message.chat.id, caption, reply_markup=main_menu(user['guaranteed_pull']))
-    auto_delete(msg, 45)
+        bot.send_message(message.chat.id, caption, reply_markup=main_menu(user['guaranteed_pull']))
 
-# ========== ИНВЕНТАРЬ ==========
+# ========== ИНВЕНТАРЬ (С ИМЕНАМИ ПЕРСОНАЖЕЙ) ==========
 def show_collection(message, page=0):
     user_id = str(message.chat.id)
     user = get_or_create_user(user_id)
@@ -472,7 +410,12 @@ def show_collection(message, page=0):
     text = f"📦 **Твоя коллекция** (страница {page+1}/{total_pages})\n\n"
     for pid in page_items:
         rarity = "5★" if pid in five_star_ids else "4★"
-        text += f"• ID {pid} [{rarity}]\n"
+        full_desc = get_description(pid)
+        if ":" in full_desc:
+            name = full_desc.split(":", 1)[0].strip()
+        else:
+            name = f"Персонаж {pid}"
+        text += f"• {name} [{rarity}]\n"
     markup = InlineKeyboardMarkup()
     if page > 0:
         markup.add(InlineKeyboardButton("◀ Назад", callback_data=f"inv_page_{page-1}"))
@@ -482,7 +425,7 @@ def show_collection(message, page=0):
     msg = bot.send_message(message.chat.id, text, reply_markup=markup)
     auto_delete(msg, 30)
 
-# ========== ПРОФИЛЬ ==========
+# ========== ПРОФИЛЬ / УРОВЕНЬ ==========
 def show_level(message):
     user_id = str(message.chat.id)
     user = get_or_create_user(user_id)
@@ -530,12 +473,16 @@ def callback(call):
         bot.edit_message_text("Главное меню", call.message.chat.id, call.message.message_id, reply_markup=main_menu(user['guaranteed_pull']))
     bot.answer_callback_query(call.id)
 
-# ========== КОМАНДЫ ==========
+# ========== ОБЫЧНЫЕ КОМАНДЫ (БЕЗ REPLY-КЛАВИАТУРЫ) ==========
 @bot.message_handler(commands=['start'])
 def start(message):
     user_id = str(message.chat.id)
     user = get_or_create_user(user_id)
-    bot.send_message(message.chat.id, f"Привет, {message.from_user.first_name}! Я гача-бот. Крути, повышай уровень, собирай коллекцию!", reply_markup=main_menu(user['guaranteed_pull']))
+    bot.send_message(
+        message.chat.id,
+        f"Привет, {message.from_user.first_name}! Я гача-бот. Используй кнопки под сообщениями, чтобы крутить, смотреть инвентарь и профиль.",
+        reply_markup=main_menu(user.get('guaranteed_pull', False))
+    )
 
 @bot.message_handler(commands=['spin'])
 def spin_cmd(message):
@@ -549,11 +496,11 @@ def inventory_cmd(message):
 def level_cmd(message):
     show_level(message)
 
-# ========== KEEP ALIVE ==========
+# ========== KEEP ALIVE И ЗАПУСК ==========
 app = Flask('')
 @app.route('/')
 def home():
-    return "Гача-бот активен!"
+    return "Гача-бот активен"
 def run():
     app.run(host='0.0.0.0', port=8080)
 def keep_alive():
@@ -562,5 +509,12 @@ def keep_alive():
 
 if __name__ == "__main__":
     keep_alive()
-    print("БОТ ЗАПУЩЕН С МЕНЮ И АВТОУДАЛЕНИЕМ!")
-    bot.polling(none_stop=True)
+    time.sleep(2)
+    bot.remove_webhook()
+    print("БОТ ЗАПУЩЕН С МЕНЮ, ИНВЕНТАРЁМ И АВТОУДАЛЕНИЕМ!")
+    while True:
+        try:
+            bot.polling(none_stop=True, interval=2)
+        except Exception as e:
+            print(f"Ошибка: {e}. Перезапуск через 10 секунд...")
+            time.sleep(10)
