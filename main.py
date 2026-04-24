@@ -2,7 +2,9 @@ import telebot
 import random
 import os
 import threading
-from flask import Flask, request
+import time
+from flask import Flask
+from threading import Thread
 from supabase import create_client, Client
 from datetime import datetime, timedelta
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -348,7 +350,7 @@ def main_menu(user_has_guarantee=False):
 
 # ========== КРУТКА ==========
 def run_gacha(message, force_character=False):
-    user_id = str(message.chat.id)
+    user_id = str(message.from_user.id)   # ВАЖНО: from_user.id
     user = get_or_create_user(user_id)
     
     if not force_character and not can_spin_free(user):
@@ -447,7 +449,7 @@ def run_gacha(message, force_character=False):
 
 # ========== ИНВЕНТАРЬ ==========
 def show_collection(message, page=0):
-    user_id = str(message.chat.id)
+    user_id = str(message.from_user.id)   # ВАЖНО: from_user.id
     user = get_or_create_user(user_id)
     collection = eval(user['collection'])
     if not collection:
@@ -474,7 +476,7 @@ def show_collection(message, page=0):
 
 # ========== ПРОФИЛЬ ==========
 def show_level(message):
-    user_id = str(message.chat.id)
+    user_id = str(message.from_user.id)   # ВАЖНО: from_user.id
     user = get_or_create_user(user_id)
     cooldown_hours = get_cooldown_hours(user['level'])
     remaining = get_remaining_cooldown(user)
@@ -494,15 +496,20 @@ def show_level(message):
     )
     bot.send_message(message.chat.id, text, reply_markup=main_menu(user['guaranteed_pull']))
 
-# ========== ОБРАБОТЧИКИ КОМАНД И КНОПОК ==========
+# ========== ОБРАБОТЧИКИ ==========
 @bot.message_handler(commands=['start'])
 def start(message):
-    user = get_or_create_user(str(message.chat.id))
-    bot.send_message(message.chat.id, f"Привет, {message.from_user.first_name}! Я гача-бот. Используй кнопки под сообщениями.", reply_markup=main_menu(user['guaranteed_pull']))
+    user_id = str(message.from_user.id)
+    user = get_or_create_user(user_id)
+    bot.send_message(
+        message.chat.id,
+        f"Привет, {message.from_user.first_name}! Я гача-бот. Используй кнопки под сообщениями.",
+        reply_markup=main_menu(user['guaranteed_pull'])
+    )
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
-    user_id = str(call.message.chat.id)
+    user_id = str(call.from_user.id)   # ВАЖНО: from_user.id
     if call.data == "spin":
         run_gacha(call.message)
     elif call.data == "guaranteed_spin":
@@ -524,27 +531,33 @@ def callback(call):
         bot.edit_message_text("Главное меню", call.message.chat.id, call.message.message_id, reply_markup=main_menu(user['guaranteed_pull']))
     bot.answer_callback_query(call.id)
 
-# ========== ОБРАБОТКА ВЕБХУКА ==========
-from flask import Flask, request
-import json
+# ========== KEEP ALIVE И ЗАПУСК ==========
+app = Flask('')
+@app.route('/')
+def home():
+    return "Gacha bot is running"
 
-app = Flask(__name__)
+def run():
+    app.run(host='0.0.0.0', port=8080)
 
-@app.route('/', methods=['GET', 'POST'])
-def webhook():
-    if request.method == 'GET':
-        return "Gacha bot is running", 200
-    if request.method == 'POST':
-        update = telebot.types.Update.de_json(request.stream.read().decode('utf-8'))
-        bot.process_new_updates([update])
-        return "OK", 200
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
 
-@app.route('/set', methods=['GET'])
-def set_webhook():
-    webhook_url = 'https://gacha-bot-24x4.onrender.com'
-    bot.remove_webhook()
-    bot.set_webhook(url=webhook_url)
-    return f"Webhook set to {webhook_url}", 200
-
+if __name__ == "__main__":
+    keep_alive()
+    time.sleep(2)
+    # Сбрасываем вебхук, чтобы использовать polling
+    try:
+        bot.remove_webhook()
+    except:
+        pass
+    print("БОТ ЗАПУЩЕН С ПРАВИЛЬНОЙ ИДЕНТИФИКАЦИЕЙ!")
+    while True:
+        try:
+            bot.polling(none_stop=True, interval=1)
+        except Exception as e:
+            print(f"Ошибка: {e}. Перезапуск через 10 секунд...")
+            time.sleep(10)
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
