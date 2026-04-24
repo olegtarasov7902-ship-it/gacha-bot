@@ -548,8 +548,10 @@ def callback(call):
 # ========== ФЛАСК ДЛЯ ВЕБХУКА ==========
 app = Flask(__name__)
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/', methods=['GET', 'HEAD', 'POST'])
 def webhook():
+    if request.method == 'HEAD':
+        return '', 200
     if request.method == 'GET':
         return "Gacha bot is running", 200
     if request.method == 'POST':
