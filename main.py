@@ -1,29 +1,44 @@
 import telebot
 import random
 import os
+import threading
 from flask import Flask
 from threading import Thread
+from supabase import create_client, Client
+from datetime import datetime, timedelta
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-# --- БЛОК ДЛЯ RENDER (Keep Alive) ---
-app = Flask('')
+# ========== КОНФИГУРАЦИЯ ==========
+BOT_TOKEN = '8708415476:AAFiu-sUnwvf031Izn8grrrrruBOtHLN7Jc'
+SUPABASE_URL = "https://yvqwztjwcoxsirxvyqoq.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2cXd6dGp3Y294c2lyeHZ5cW9xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMzg3NjMsImV4cCI6MjA5MjYxNDc2M30.5eVs73s2_MYdD93jRFAS0N2m_nGmt5ze13inhjdR1Ws"
 
-@app.route('/')
-def home():
-    return "Гача-бот активен!"
+bot = telebot.TeleBot(BOT_TOKEN)
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def run():
-    app.run(host='0.0.0.0', port=8080)
+# ========== АВТОУДАЛЕНИЕ ==========
+def auto_delete(msg, seconds=30):
+    if msg:
+        threading.Timer(seconds, lambda: bot.delete_message(msg.chat.id, msg.message_id)).start()
 
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-# ------------------------------------
+# ========== СПИСКИ РЕДКОСТИ ==========
+four_star_genshin = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 18, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 85]
+five_star_genshin = [1, 14, 15, 16, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 83, 84]
+four_star_hsr = [88, 89, 91, 92, 94, 95, 96, 98, 99, 103, 106, 108, 109, 110, 113, 116, 118]
+five_star_hsr = [87, 86, 90, 93, 97, 100, 101, 102, 104, 105, 107, 111, 112, 114, 115, 117, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139]
+four_star_zzz = [141, 146, 147, 148, 153, 156, 159, 161, 168, 170, 171, 173, 174, 175, 177, 178, 180, 182, 183, 184]
+five_star_zzz = [185, 140, 142, 143, 144, 145, 149, 150, 151, 152, 154, 155, 157, 158, 160, 162, 163, 164, 165, 166, 167, 169, 172, 176, 179, 181, 185]
+four_star_wuwa = [194, 196, 198, 201, 205, 206, 207, 215, 218, 219, 220, 224, 225, 228, 229, 230, 231]
+five_star_wuwa = [186, 187, 188, 189, 190, 191, 192, 193, 195, 197, 199, 200, 202, 203, 204, 208, 209, 210, 211, 212, 213, 214, 216, 217, 221, 222, 223]
 
-# ТОКЕН БОТА
-bot = telebot.TeleBot('8708415476:AAFiu-sUnwvf031Izn8grrrrruBOtHLN7Jc')
+four_star_ids = four_star_genshin + four_star_hsr + four_star_zzz + four_star_wuwa
+five_star_ids = five_star_genshin + five_star_hsr + five_star_zzz + five_star_wuwa
 
+# ========== СЛОВАРЬ ОПИСАНИЙ (ЗАМЕНИ НА СВОЙ ПОЛНЫЙ) ==========
 descriptions = {
-    # === GENSHIN IMPACT (1 - 85) ===
+     # === GENSHIN IMPACT (1 - 85) ===
+    1: "🌠 Паймон: Ты сегодня главный гид!",
+    2: "🔥 Дилюк: Ты сегодня сама серьезность.",
     1: "🌠 Паймон: Ты сегодня главный гид! Ты настоящий знаток Тейвата с невероятным аппетитом.",
     2: "🔥 Дилюк: Ты сегодня сама серьезность. Ты предпочитаешь работать в тени, но сияешь на рассвете.",
     3: "🧊 Аяка: Изящество и безупречные манеры. Твоя стихия — тихие прогулки и танцы у воды.",
@@ -110,7 +125,7 @@ descriptions = {
     84: "🏰 Страж руин: Стальной и надежный. Ты крутишься как белка в колесе, выполняя задачи.",
     85: "🌅 Рассвет Тейвата: Время перемен. Ты начинаешь новую жизнь с абсолютно чистого листа.",
 
-       # === HONKAI: STAR RAIL (86 - 150) ===
+    # === HONKAI: STAR RAIL (86 - 139) ===
     86: "🚅 Первопроходец: Искатель сокровищ в мусорных баках! Хаос — твое второе имя.",
     87: "🦋 Зеле: Время исчезнуть в море бабочек! Твоя скорость и резкость поражают врагов.",
     88: "🧊 Март 7: Королева селфи! Ты вечно что-то забываешь, но всегда остаешься на позитиве.",
@@ -167,7 +182,7 @@ descriptions = {
     139: "👗 Мессенджер: Тайны Сада. Ты появляешься из ниоткуда так, будто сама память обрела плоть, превращая забытые мгновения в драгоценные зеркала.",
 
 
-   # === ZZZ: ПРЕДСКАЗАНИЕ НА ДЕНЬ (140 - 187) ===
+   # === ZZZ: ПРЕДСКАЗАНИЕ НА ДЕНЬ (140 - 184) ===
     140: "🐻 Бен Биггер: Медведь-бухгалтер. Ты считаешь налоги и при этом легко крушишь стены.",
     141: "🐈 Некомия Мана: Твоя кошачья грация и скорость сегодня на высоте. Быстрая реакция и любовь к рыбе.",
     142: "☯️ Сокаку: Ты очень хочешь есть, но боевой флаг в твоих руках не дрогнет. Голодный они опаснее вдвойне.",
@@ -198,7 +213,7 @@ descriptions = {
     167: "🔷 Идхари Мёрфи: Ты паломница. Твоя молитва приносит благословение, а копьё — суровое правосудие.",
     168: "🌊 Комано Манато: Ты — прилив ярости. Спокоен, как океан в штиль, и беспощаден, как цунами.",
     169: "🗣️ Орфи и Магус: Вы — дуэт тьмы. Говорите шёпотом, чтобы никто не услышал ваш смертельный приговор.",
-    170: "🤖 Сид: Ты пилот боевого меха. Юная гениальная девушка, заряжающая всех электричеством.",
+    170: "🤖 Сидп: Ты пилот боевого меха. Юная гениальная девушка, заряжающая всех электричеством.",
     171: "👼 Ария: Ты посланница эфира. Твой полёт грациозен, а атаки пронзают любые щиты.",
     172: "✨ Сунна: Ты — луч света. Не бьёшь врага напрямую, а ослепляешь его своей харизмой.",
     173: "💎 Диалин: Ты танцующая скала. Твои движения тяжелы, но каждый шаг — это сокрушительный удар.",
@@ -213,68 +228,339 @@ descriptions = {
     182: "🐱 Эллен: Ты сонная акула. Просто хочешь холодный лимонад, удобное кресло и полный покой.",
     183: "🤠 Билли: Ты фанат супергероев. Твои пафосные позы и стрельба на стиле сегодня бесподобны.",
     184: "🔨 Энби: Твоё абсолютное спокойствие заразительно. Твой план на день — эффективность и пара сочных бургеров.",
+    185: "❄️ Мияби: Ты — командир Секции 6, наследница могущественного клана и непревзойдённый мастер меча.",
+
+
+# === WUTHERING WAVES: ПРЕДСКАЗАНИЕ НА ДЕНЬ (186 - 231) ===
+    186: "🗡️ Ровер: Главный герой. Ты — странник, пробуждающийся в новом мире, чтобы раскрыть древние секреты и свою истинную судьбу.",
+    187: "🍃 Янъян: Авангард Цзиньчжоу. Ты ищешь тишины и покоя, но всегда готова помочь тем, кто нуждается в утешении.",
+    188: "🔥 Чися: Младший патрульный Цзиньчжоу. Твоя дружелюбная улыбка и помощь ближним сделали тебя настоящим героем для своего сообщества.",
+    189: "📚 Аальто: Загадочный торговец информацией. Ты всегда появляешься там, где нужно, и так же бесследно исчезаешь.",
+    190: "🌊 Байчжи: Исследовательница Академии Хуасу. Ты неутомимо изучаешь неизведанное и помогаешь другим в их поисках знаний.",
+    191: "⚡ Кальчаро: Наёмник из Новой Федерации. Твой опасный и непредсказуемый нрав столь же силён, сколь и твой электрический клинок.",
+    192: "✨ Данжин: Одержимая резонаторка. Ты борешься со своим проклятием, но используешь его силу, чтобы уничтожать монстров.",
+    193: "🔥 Анкор: Одарённая резонаторка из Новой Федерации. Твоё живое воображение превращает реальность в волшебную сказку.",
+    194: "🍃 Цзяньсинь: Монахиня из Цзиньчжоу. Ты ищешь просветления, но твои удары и пари также безупречны, как и твоя мудрость.",
+    195: "✨ Цзиньси: Магистрат Цзиньчжоу. Ты несешь надежду своему народу и готова повести его за собой сквозь любую бурю.",
+    196: "🌪️ Цзиян: Генерал Цзиньчжоу. Ты ведёшь войска в бой, подчиняя себе силу зелёного дракона.",
+    197: "❄️ Линъян: Танцующий зверь. Ты находишь радость в свободе и отчаянно пытаешься сбежать от своей судьбы.",
+    198: "⚡ Иньлинь: Библиотекарь на побегушках. Ты постоянно попадаешь в переделки, но твоя искренность даже разряды молний делает дружелюбными.",
+    199: "🔥 Чанли: Адвокат Цзиньчжоу. Твой острый ум и языки пламени одинаково эффективно поджигают истину в суде.",
+    200: "⚡ Юаньу: Хозяин зала единоборств. Ты спокоен и уверен в себе, в совершенстве владея боевыми искусствами.",
+    201: "✨ Верина: Ботаник из Цзиньчжоу. Ты понимаешь язык растений и используешь дары природы, чтобы исцелять раны.",
+    202: "❄️ Саньхуа: Личный страж Магистрата. Ты молчалива и держишь всё под контролем — как в бою, так и в жизни.",
+    203: "🔥 Мортефи: Затворник с горящим сердцем. Ты мастер на все руки и можешь заставить замолчать кого угодно, особенно если это мешает твоему покою.",
+    204: "❄️ Карлотта: Вторая дочь дома Монтелли. Твои утончённая элегантность и острый ум помогают решать самые деликатные проблемы.",
+    205: "⚡ Сянли Яо: Выдающийся учёный Академии Хуасу. Твоя жажда знаний и стремление к вычислительной моторике не знают границ.",
+    206: "🗡️ Камелия: Носительница Цветка из «Чёрных берегов». Твоя грация обманчива, ведь рядом с тобой опасность становится желанной гостьей.",
+    207: "🔥 Брант: Бывший пират. Твоя смелость и умение обращаться с мечом оставляют за собой лишь пепел и легенды.",
+    208: "🍃 Картетия: Таинственный резонатор. Ты плетёшь потоки эфира в воздухе, подобно искусному музыканту.",
+    209: "❄️ Юху: Странствующая целительница. Ты предпочитаешь действовать быстро и эффективно, чтобы спасти как можно больше жизней.",
+    210: "🌊 Люми: Искромётный авантюрист. Ты способен усмирить любую механическую душу и способен на самые смелые авантюры.",
+    211: "🍃 Иуно: Избранная чемпионка. Ты неизменна в своей вере, как скалы на ветру, и тверда в достижении своей цели.",
+    212: "✨ Феба: Таинственная жрица. Ты плетёшь нити судьбы с помощью зеркал и отражений, в которых скрыты миры.",
+    213: "🌑 Фролова: Танцовщица хаоса. Твои движения столь же прекрасны, сколь и смертоносны, заставляя врагов забыть о реальности.",
+    214: "🎭 Рочча: Одарённая комедиантка-импровизатор. Ты способна рассмешить даже в самой безнадёжной ситуации, но за маской скрывается бездна.",   
+    215: "⚡ Августа: Лидер Ордена Глубины. Твоя воля столь же несгибаема, как металлический клинок, рассекающий волны.",
+    216: "🔥 Галбрена: Одержимая мстительница. Твоё сердце пылает огнём, который сжигает всех, кто встаёт на пути.",
+    217: "🌊 Лупа: Оборотень. Твоя пламенная натура берёт верх над рассудком в критические моменты, и тогда грянет ярость.",
+    218: "🍃 Чаккона: Путешественница между мирами. Ты подчиняешь себе силу ветра и следуешь своему пути, где бы он ни пролегал.",
+    219: "🌑 Кантарелла: Таинственная сирена из глубины. Твоя завораживающая песня манит путников в вечный сон.",
+    220: "🌊 Цзэчжи: Художница из Цзиньчжоу. Ты мечтаешь запечатлеть этот жестокий мир в своих нежных картинах.",    
+    221: "🍃 Чиса: Дитя солнца. Ты даришь людям тепло и свет, от которых тают даже самые суровые сердца.",
+    222: "⚡ Гешу Линь: Военачальник. Твоя воля и сила столь же несокрушимы, как горы, на которые ты опираешься.",
+    223: "🌑 Шрама: Странствующий рыцарь. Ты ищешь свой путь в этом мире и готов сражаться за тех, кто не может за себя постоять.",    
+    224: "⚡ Шоркипер (Хранительница берега): Таинственная фигура. Ты поддерживаешь баланс жизни и смерти, даруя союзникам новую надежду.",
+    225: "🧊 Линне: Гяру-отличница. Твоя популярность в школе не знает границ, а за внешней лёгкостью скрывается острый ум."
 }
+def get_description(num):
+    return descriptions.get(num, f"Описание персонажа {num} в разработке.")
 
+# ========== РАБОТА С БД ==========
+def get_or_create_user(user_id):
+    result = supabase.table('users').select('*').eq('user_id', user_id).execute()
+    if result.data:
+        return result.data[0]
+    else:
+        new_user = {
+            'user_id': user_id,
+            'currency': 0,
+            'total_spins': 0,
+            'collection': '[]',
+            'level': 1,
+            'exp': 0,
+            'guaranteed_pull': False,
+            'last_free_spin': None
+        }
+        supabase.table('users').insert(new_user).execute()
+        return new_user
 
+def update_user(user_id, updates):
+    supabase.table('users').update(updates).eq('user_id', user_id).execute()
 
-def run_gacha(message):
-    try:
-        # Выбираем случайное число (поставь 85 или 255 в зависимости от кол-ва фото)
-        num = random.randint(1, 184)
-        
-        # Определяем категорию
-        if 1 <= num <= 85:
-            category = "🟢 GENSHIN IMPACT"
-        elif 86 <= num <= 139:
-            category = "🔴 HONKAI: STAR RAIL"
-        elif 140 <= num <= 184:
-            category = "🔵 ZENLESS ZONE ZERO"
+# ========== КУЛДАУН ==========
+def get_cooldown_hours(level):
+    base = 24
+    reduction = (level - 1) * 0.5
+    return max(base - reduction, 6)
+
+def can_spin_free(user):
+    last = user.get('last_free_spin')
+    if last is None:
+        return True
+    last_time = datetime.fromisoformat(last)
+    cooldown = get_cooldown_hours(user['level'])
+    return datetime.now() >= last_time + timedelta(hours=cooldown)
+
+def get_remaining_cooldown(user):
+    last = user.get('last_free_spin')
+    if last is None:
+        return None
+    last_time = datetime.fromisoformat(last)
+    cooldown = get_cooldown_hours(user['level'])
+    ready_time = last_time + timedelta(hours=cooldown)
+    remaining = ready_time - datetime.now()
+    if remaining.total_seconds() <= 0:
+        return None
+    hours = int(remaining.total_seconds() // 3600)
+    minutes = int((remaining.total_seconds() % 3600) // 60)
+    return f"{hours}ч {minutes}мин"
+
+# ========== ОПЫТ ЗА ИСХОД ==========
+def get_exp_for_outcome(outcome_type):
+    if outcome_type == 'resource':
+        return random.randint(10, 30)
+    elif outcome_type == '4star':
+        return random.randint(40, 70)
+    elif outcome_type == '5star':
+        return random.randint(100, 150)
+    return 10
+
+# ========== МЕНЮ ==========
+def main_menu(user_has_guarantee=False):
+    markup = InlineKeyboardMarkup(row_width=2)
+    markup.add(InlineKeyboardButton("🔮 Крутить", callback_data="spin"))
+    markup.add(InlineKeyboardButton("📦 Инвентарь", callback_data="inventory"))
+    markup.add(InlineKeyboardButton("📊 Уровень", callback_data="level"))
+    if user_has_guarantee:
+        markup.add(InlineKeyboardButton("⭐ Гарант-крутка", callback_data="guaranteed_spin"))
+    return markup
+
+# ========== КРУТКА ==========
+def run_gacha(message, force_character=False):
+    user_id = str(message.chat.id)
+    user = get_or_create_user(user_id)
+    
+    if not force_character and not can_spin_free(user):
+        remaining = get_remaining_cooldown(user)
+        msg = bot.send_message(message.chat.id, f"❌ Бесплатная крутка через {remaining}. Повышай уровень!", reply_markup=main_menu(user['guaranteed_pull']))
+        auto_delete(msg, 10)
+        return
+    
+    if force_character:
+        if random.randint(1, 100) <= 30:
+            outcome_type = '5star'
         else:
-            category = "🟡 ПРИКОЛЫ И МЕМЫ"
-
-        text = descriptions.get(num, "Описание в разработке...")
-        
-        # Путь к картинке (ищем в папке images рядом с кодом)
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        img_path = os.path.join(script_dir, 'images', f'{num}.jpg')
-        
-        caption_text = f"━━━━ {category} ━━━━\n\n{text}"
-
+            outcome_type = '4star'
+    else:
+        level = user['level']
+        bonus = min((level - 1) * 0.4, 6)
+        chance_5 = 10 + bonus
+        chance_4 = 30
+        chance_resource = 100 - chance_5 - chance_4
+        roll = random.randint(1, 100)
+        if roll <= chance_5:
+            outcome_type = '5star'
+        elif roll <= chance_5 + chance_4:
+            outcome_type = '4star'
+        else:
+            outcome_type = 'resource'
+    
+    exp_gain = get_exp_for_outcome(outcome_type)
+    currency_gain = random.randint(1, 5) if outcome_type == 'resource' else random.randint(5, 15)
+    
+    if outcome_type in ['4star', '5star']:
+        if outcome_type == '4star':
+            char_id = random.choice(four_star_ids)
+            rarity_text = "⭐⭐⭐⭐ (4★)"
+        else:
+            char_id = random.choice(five_star_ids) if five_star_ids else random.choice(four_star_ids)
+            rarity_text = "⭐⭐⭐⭐⭐ (5★)"
+        if char_id <= 85: category = "🟢 GENSHIN IMPACT"
+        elif char_id <= 139: category = "🔴 HONKAI: STAR RAIL"
+        elif char_id <= 185: category = "🔵 ZENLESS ZONE ZERO"
+        else: category = "🟡 WUTHERING WAVES"
+        text = get_description(char_id)
+        collection = eval(user['collection'])
+        is_new = char_id not in collection
+        if is_new:
+            collection.append(char_id)
+            update_user(user_id, {'collection': str(collection)})
+        else:
+            currency_gain += random.randint(5, 10)
+    else:
+        char_id = None
+        category = "📦 РЕСУРСЫ"
+        rarity_text = "🍃 Обычная крутка"
+        text = "Тебе не попался персонаж, но ты получил ценный опыт и монеты."
+        is_new = False
+    
+    new_exp = user['exp'] + exp_gain
+    new_currency = user['currency'] + currency_gain
+    level = user['level']
+    leveled_up = False
+    while new_exp >= level * 100:
+        new_exp -= level * 100
+        level += 1
+        leveled_up = True
+        new_currency += 5
+        if level % 5 == 0:
+            update_user(user_id, {'guaranteed_pull': True})
+            bot.send_message(message.chat.id, f"🎁 За уровень {level} ты получил гарант-крутку!")
+    
+    updates = {
+        'exp': new_exp,
+        'currency': new_currency,
+        'level': level,
+        'total_spins': user['total_spins'] + 1,
+    }
+    if not force_character:
+        updates['last_free_spin'] = datetime.now().isoformat()
+    update_user(user_id, updates)
+    
+    if outcome_type in ['4star', '5star']:
+        caption = f"━━━━ {category} ━━━━\n\n{rarity_text}\n{text}\n\n"
+        if is_new:
+            caption += f"✨ Новый персонаж в коллекции!\n"
+        else:
+            caption += f"🔄 Дубликат! +{currency_gain - (5 if outcome_type=='4star' else 10)} монет.\n"
+        caption += f"📈 +{exp_gain} опыта | 💰 +{currency_gain} монет\n"
+    else:
+        caption = f"🌀 **Крутка принесла ресурсы!**\n\n📈 +{exp_gain} опыта\n💰 +{currency_gain} монет\n"
+    if leveled_up:
+        caption += f"🎉 Новый уровень {level}! +5 монет!\n"
+    caption += f"\n📊 Уровень: {level} | 📈 Опыт: {new_exp}/{level*100} | 💰 Монет: {new_currency}"
+    
+    user = get_or_create_user(user_id)  # обновим данные для меню
+    if outcome_type in ['4star', '5star'] and char_id:
+        img_path = os.path.join(os.path.dirname(__file__), 'images', f'{char_id}.jpg')
         if os.path.exists(img_path):
             with open(img_path, 'rb') as photo:
-                bot.send_photo(message.chat.id, photo, caption=caption_text)
+                msg = bot.send_photo(message.chat.id, photo, caption=caption, reply_markup=main_menu(user['guaranteed_pull']))
         else:
-            bot.send_message(message.chat.id, f"🖼 (Фото {num}.jpg не найдено)\n\n{caption_text}")
+            msg = bot.send_message(message.chat.id, caption, reply_markup=main_menu(user['guaranteed_pull']))
+    else:
+        msg = bot.send_message(message.chat.id, caption, reply_markup=main_menu(user['guaranteed_pull']))
+    auto_delete(msg, 45)
 
-    except Exception as e:
-        print(f"Error: {e}")
-        bot.send_message(message.chat.id, "Ой! Произошла ошибка. Попробуй ещё раз.")
+# ========== ИНВЕНТАРЬ ==========
+def show_collection(message, page=0):
+    user_id = str(message.chat.id)
+    user = get_or_create_user(user_id)
+    collection = eval(user['collection'])
+    if not collection:
+        msg = bot.send_message(message.chat.id, "📭 У тебя пока нет персонажей. Крути гачу!", reply_markup=main_menu(user['guaranteed_pull']))
+        auto_delete(msg, 20)
+        return
+    items_per_page = 10
+    total_pages = (len(collection) + items_per_page - 1) // items_per_page
+    if page < 0: page = 0
+    if page >= total_pages: page = total_pages - 1
+    start = page * items_per_page
+    end = start + items_per_page
+    page_items = collection[start:end]
+    text = f"📦 **Твоя коллекция** (страница {page+1}/{total_pages})\n\n"
+    for pid in page_items:
+        rarity = "5★" if pid in five_star_ids else "4★"
+        text += f"• ID {pid} [{rarity}]\n"
+    markup = InlineKeyboardMarkup()
+    if page > 0:
+        markup.add(InlineKeyboardButton("◀ Назад", callback_data=f"inv_page_{page-1}"))
+    if page < total_pages - 1:
+        markup.add(InlineKeyboardButton("Вперед ▶", callback_data=f"inv_page_{page+1}"))
+    markup.add(InlineKeyboardButton("🔙 Главное меню", callback_data="menu"))
+    msg = bot.send_message(message.chat.id, text, reply_markup=markup)
+    auto_delete(msg, 30)
 
-# ОБРАБОТКА КОМАНД И КНОПОК
+# ========== ПРОФИЛЬ ==========
+def show_level(message):
+    user_id = str(message.chat.id)
+    user = get_or_create_user(user_id)
+    cooldown_hours = get_cooldown_hours(user['level'])
+    remaining = get_remaining_cooldown(user)
+    bonus = min((user['level'] - 1) * 0.4, 6)
+    chance_5 = 10 + bonus
+    text = (
+        f"📊 **Твой профиль**\n\n"
+        f"🎚️ Уровень: {user['level']}\n"
+        f"📈 Опыт: {user['exp']} / {user['level']*100}\n"
+        f"💰 Монет: {user['currency']}\n"
+        f"🎲 Всего круток: {user['total_spins']}\n"
+        f"👥 Персонажей: {len(eval(user['collection']))}\n"
+        f"⏱️ Кулдаун: {cooldown_hours} ч\n"
+        f"⏳ До крутки: {remaining if remaining else 'Готова!'}\n"
+        f"🍀 Бонус к 5★: +{bonus:.1f}% (итого {chance_5:.1f}%)\n"
+        f"⭐ Гарант: {'Да' if user['guaranteed_pull'] else 'Нет'}"
+    )
+    msg = bot.send_message(message.chat.id, text, reply_markup=main_menu(user['guaranteed_pull']))
+    auto_delete(msg, 30)
 
+# ========== ОБРАБОТЧИК КНОПОК ==========
+@bot.callback_query_handler(func=lambda call: True)
+def callback(call):
+    user_id = str(call.message.chat.id)
+    if call.data == "spin":
+        run_gacha(call.message)
+    elif call.data == "guaranteed_spin":
+        user = get_or_create_user(user_id)
+        if user['guaranteed_pull']:
+            update_user(user_id, {'guaranteed_pull': False})
+            run_gacha(call.message, force_character=True)
+        else:
+            bot.answer_callback_query(call.id, "Нет гарант-крутки. Получи её за каждые 5 уровней.", show_alert=True)
+    elif call.data == "inventory":
+        show_collection(call.message)
+    elif call.data == "level":
+        show_level(call.message)
+    elif call.data.startswith("inv_page_"):
+        page = int(call.data.split("_")[2])
+        show_collection(call.message, page)
+    elif call.data == "menu":
+        user = get_or_create_user(user_id)
+        bot.edit_message_text("Главное меню", call.message.chat.id, call.message.message_id, reply_markup=main_menu(user['guaranteed_pull']))
+    bot.answer_callback_query(call.id)
+
+# ========== КОМАНДЫ ==========
 @bot.message_handler(commands=['start'])
 def start(message):
-    # Создаем кнопку
-    markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
-    btn = telebot.types.KeyboardButton("🔮 Крутить Гачу!")
-    markup.add(btn)
-    
-    bot.send_message(
-        message.chat.id, 
-        f"Привет, {message.from_user.first_name}! Жми на кнопку, чтобы получить карту дня!", 
-        reply_markup=markup
-    )
+    user_id = str(message.chat.id)
+    user = get_or_create_user(user_id)
+    bot.send_message(message.chat.id, f"Привет, {message.from_user.first_name}! Я гача-бот. Крути, повышай уровень, собирай коллекцию!", reply_markup=main_menu(user['guaranteed_pull']))
 
-@bot.message_handler(func=lambda message: message.text == "🔮 Крутить Гачу!")
-def gacha_button(message):
+@bot.message_handler(commands=['spin'])
+def spin_cmd(message):
     run_gacha(message)
 
-@bot.message_handler(commands=['gacha'])
-def gacha_cmd(message):
-    run_gacha(message)
+@bot.message_handler(commands=['inventory'])
+def inventory_cmd(message):
+    show_collection(message)
 
-# ЗАПУСК
+@bot.message_handler(commands=['level'])
+def level_cmd(message):
+    show_level(message)
+
+# ========== KEEP ALIVE ==========
+app = Flask('')
+@app.route('/')
+def home():
+    return "Гача-бот активен!"
+def run():
+    app.run(host='0.0.0.0', port=8080)
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
 if __name__ == "__main__":
-    keep_alive()  # Запускаем Flask
-    print("БОТ ЗАПУЩЕН!")
+    keep_alive()
+    print("БОТ ЗАПУЩЕН С МЕНЮ И АВТОУДАЛЕНИЕМ!")
     bot.polling(none_stop=True)
