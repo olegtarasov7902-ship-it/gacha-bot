@@ -349,34 +349,35 @@ def main_menu(user_has_guarantee=False):
 # ========== КРУТКА ==========
 def run_gacha(chat_id, user_id, force_character=False):
     user = get_or_create_user(user_id)
-    
+
     if not force_character and not can_spin_free(user):
         remaining = get_remaining_cooldown(user)
         msg = bot.send_message(chat_id, f"❌ Бесплатная крутка через {remaining}. Повышай уровень!", reply_markup=main_menu(user['guaranteed_pull']))
         auto_delete(msg, 10)
         return
-    
-    # Определяем исход
-if force_character:
-    # Только персонажи: 30% 5★, 70% 4★
-    roll = random.randint(1, 100)
-    if roll <= 30:
-        outcome_type = '5star'
-    else:
-        outcome_type = '4star'
-else:
-    # 30% 5★, 50% 4★, 20% ресурсы
-    roll = random.randint(1, 100)
-    if roll <= 30:
-        outcome_type = '5star'
-    elif roll <= 80:  # 30+50
-        outcome_type = '4star'
-    else:
-        outcome_type = 'resource'
 
-exp_gain = get_exp_for_outcome(outcome_type)
-currency_gain = random.randint(1, 5) if outcome_type == 'resource' else random.randint(5, 15)
-    
+    # Определяем исход
+    if force_character:
+        # Только персонажи: 30% 5★, 70% 4★
+        roll = random.randint(1, 100)
+        if roll <= 30:
+            outcome_type = '5star'
+        else:
+            outcome_type = '4star'
+    else:
+        # 30% 5★, 50% 4★, 20% ресурсы
+        roll = random.randint(1, 100)
+        if roll <= 30:
+            outcome_type = '5star'
+        elif roll <= 80:  # 30+50
+            outcome_type = '4star'
+        else:
+            outcome_type = 'resource'
+
+    exp_gain = get_exp_for_outcome(outcome_type)
+    currency_gain = random.randint(1, 5) if outcome_type == 'resource' else random.randint(5, 15)
+
+    # ... остальной код функции (с отступами) ...
     if outcome_type in ['4star', '5star']:
         char_id = random.choice(five_star_ids) if outcome_type == '5star' else random.choice(four_star_ids)
         if char_id <= 85: category = "🟢 GENSHIN IMPACT"
