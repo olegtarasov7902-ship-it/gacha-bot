@@ -357,24 +357,25 @@ def run_gacha(chat_id, user_id, force_character=False):
         return
     
     # Определяем исход
-    if force_character:
-        outcome_type = '5star' if random.randint(1, 100) <= 30 else '4star'
+if force_character:
+    # Только персонажи: 30% 5★, 70% 4★
+    roll = random.randint(1, 100)
+    if roll <= 30:
+        outcome_type = '5star'
     else:
-        level = user['level']
-        bonus = min((level - 1) * 0.4, 6)
-        chance_5 = 10 + bonus
-        chance_4 = 30
-        chance_resource = 100 - chance_5 - chance_4
-        roll = random.randint(1, 100)
-        if roll <= chance_5:
-            outcome_type = '5star'
-        elif roll <= chance_5 + chance_4:
-            outcome_type = '4star'
-        else:
-            outcome_type = 'resource'
-    
-    exp_gain = get_exp_for_outcome(outcome_type)
-    currency_gain = random.randint(1, 5) if outcome_type == 'resource' else random.randint(5, 15)
+        outcome_type = '4star'
+else:
+    # 30% 5★, 50% 4★, 20% ресурсы
+    roll = random.randint(1, 100)
+    if roll <= 30:
+        outcome_type = '5star'
+    elif roll <= 80:  # 30+50
+        outcome_type = '4star'
+    else:
+        outcome_type = 'resource'
+
+exp_gain = get_exp_for_outcome(outcome_type)
+currency_gain = random.randint(1, 5) if outcome_type == 'resource' else random.randint(5, 15)
     
     if outcome_type in ['4star', '5star']:
         char_id = random.choice(five_star_ids) if outcome_type == '5star' else random.choice(four_star_ids)
