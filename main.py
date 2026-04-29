@@ -1,4 +1,3 @@
-gacha-bot-n1qa.onrender.comimport telebot
 import random
 import os
 import threading
