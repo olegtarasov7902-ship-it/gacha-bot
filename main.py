@@ -8,7 +8,8 @@ from datetime import datetime, timedelta
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ========== КОНФИГУРАЦИЯ ==========
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv("BOT_TOKEN")        # читаем токен из переменной окружения
+bot = telebot.TeleBot(TOKEN)          # используем переменную TOKEN
 SUPABASE_URL = "https://yvqwztjwcoxsirxvyqoq.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2cXd6dGp3Y294c2lyeHZ5cW9xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMzg3NjMsImV4cCI6MjA5MjYxNDc2M30.5eVs73s2_MYdD93jRFAS0N2m_nGmt5ze13inhjdR1Ws"
 
