@@ -563,7 +563,7 @@ def webhook():
 
 @app.route('/set', methods=['GET'])
 def set_webhook():
-    webhook_url = 'gacha-bot-n1qa.onrender.com'
+    webhook_url = 'https://gacha-bot-n1qa.onrender.com'
     bot.remove_webhook()
     bot.set_webhook(url=webhook_url)
     return f"Webhook set to {webhook_url}", 200
